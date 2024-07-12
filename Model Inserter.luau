@@ -5,6 +5,259 @@ js/rbx/FileFormat/BinaryParser.js
 js/rbx/FileFormat/ByteReader.js
 ]]
 
+OOP = {}
+
+local tokens = {"instanceof", "super", "class", "classMethods"}
+
+--[[function OOP.InstanceOf(obj, class)
+	return OOP.IsObject(obj) and OOP.IsClass(class) and obj.class == class
+		or obj.super and OOP.InstanceOf(obj.super, class)
+end
+
+function OOP.IsClass(class)
+	return type(class) == "userdata" and getmetatable(class) == "oop_class"
+end
+
+function OOP.IsObject(obj)
+	return type(obj) == "userdata" and getmetatable(obj) == "oop_object"
+end]]
+
+function getHighestInheritor(object)
+	if rawequal(object.__data.inheritor, object) then
+		error("Object is equal to inheritor")
+	end
+	return object.__data.inheritor and getHighestInheritor(object.__data.inheritor) or object
+end
+
+function OOP.CreateClass(base, proxy)	
+	local static = {}
+
+	local class = proxy or newproxy(true)
+	local meta = getmetatable(class)
+
+	local classMethods = Class.new(class, base)
+	static.Class = classMethods
+
+	local function newObject(shouldInit: boolean, data: {any}?, ...)
+		local vars = setmetatable({}, {
+			__index = static
+		})
+
+		local object = newproxy(true)
+		local meta = getmetatable(object)		
+
+		local inheritor, mainInheritor = unpack(data or {})
+		mainInheritor = mainInheritor or object
+
+		vars.__data = {
+			initiated = false,
+			inheritor = inheritor,
+			mainInheritor = mainInheritor,
+			vars = vars
+		}
+
+		vars.class = class
+
+		function vars:instanceof(otherClass)
+			return classMethods:IsInstanceOf(otherClass)
+		end
+
+		function vars:equals(obj)
+			if getmetatable(obj) == "oop_object" then
+				return rawequal(mainInheritor, obj.__data.mainInheritor)
+			else
+				return rawequal(object, obj)
+			end
+		end
+
+		function vars:__get(member)
+			local val = vars[member]
+			
+			if val ~= nil then
+				if type(val) == "function" then
+					return function(_, ...)
+						return val(object, ...)
+					end
+				end
+
+				return val
+			elseif vars.__data.super then
+				return vars.__data.super:__get(member)
+			end
+
+			return nil
+		end
+
+		meta.__index = function(self, index)
+			if index == "__data" then
+				return vars.__data
+			elseif index == "super" then
+				return vars.super
+			elseif index == "__get" then
+				return vars.__get
+			end
+
+			return mainInheritor:__get(index)
+		end
+
+		meta.__newindex = function(self, index, value)
+			local super = vars.__data.super
+
+			--[[if table.find(tokens, index) then
+				if index ~= "super" or not base or super then
+					error("Attempted to set a token name: "..index)
+				end
+			end]]
+
+			if index == "super" then
+				vars.super = value
+			elseif inheritor then
+				mainInheritor[index] = value
+			else
+				vars[index] = value
+			end
+		end
+
+		meta.__call = function(self, ...)
+			if vars.__data.initiated then
+				print(vars.__data)
+				error("Instance already initiated", 2)
+			end
+
+			vars.__data.initiated = true
+
+			local super = vars.__data.super
+
+			if static.__init then
+				static.__init(object, ...)
+
+				if super and not super.__data.initiated then
+					error("Must call super constructor in derived class before the end of initialization.", 2)
+				end
+			elseif super then
+				super(...)
+			end
+		end
+
+		meta.__tostring = function(self)
+			return static.__tostring and static.__tostring(self) or tostring(class).." object"
+		end
+		
+		meta.__len = function(self)
+			return assert(static.__len, "__len is unassigned")(self)
+		end
+		
+		meta.__iter = function(self)
+			return assert(static.__iter, "__iter is unassigned")(self)
+		end
+
+		meta.__metatable = "oop_object"
+
+		meta.__eq = function(self, obj)
+			if getmetatable(obj) == "oop_object" then
+				return rawequal(vars.__data.mainInheritor, obj.__data.mainInheritor)
+			else
+				return rawequal(object, obj)
+			end
+		end
+
+		if inheritor then
+			local inherSuper = newproxy(true)
+			local mt = getmetatable(inherSuper)
+
+			for prop, val in meta do
+				mt[prop] = val
+			end
+
+			mt.__index = function(self, index)
+				return vars:__get(index)
+			end
+
+			mt.__tostring = function(self)
+				return tostring(object).." (extra)"
+			end
+
+			inheritor.super = inherSuper
+			inheritor.__data.super = object
+		end
+
+		if base then
+			base.newObject(false, {object, mainInheritor}, ...)
+		end
+
+		static.assign(object)
+
+		if shouldInit then
+			object(...)
+		end
+
+		return object
+	end
+
+	function static.new(...)
+		return newObject(true, nil, ...)
+	end
+
+	function static.AbstractMethod(methodName: string)
+		if type(methodName) ~= "string" then
+			error("The type of method name isn't a string. Got "..typeof(methodName))
+		end
+
+		static[methodName] = function()
+			error("Attempted to call an abstract method. Inheritor must have "..methodName.." included.")
+		end
+	end
+
+	static.assign = function() end
+
+	static.newObject = newObject
+
+	meta.__index = function(self, index)
+		return static[index]
+	end
+
+	meta.__newindex = function(self, index, value)
+		if index == "new" then
+			static.__init = value
+		else
+			static[index] = value
+		end
+	end
+
+	meta.__tostring = function(self)
+		return static.__className or "Class" --or static.env.script.Name
+	end
+
+	meta.__metatable = "oop_class"
+
+	return class
+end
+
+function OOP.CreateSimpleClass()
+	local Class = setmetatable({}, {
+		__newindex = function(self, index, value)
+			if index == "new" then
+				index = "__init__"
+			end
+			
+			rawset(self, index, value)
+		end
+	})
+	
+	Class.__index = Class
+	
+	rawset(Class, "new", function()
+		local self = setmetatable({}, Class)
+
+		if self.__init__ then
+			self.__init__()
+		end
+
+		return self
+	end)
+	
+	return Class
+end
 
 local HttpService = game:GetService("HttpService")
 
@@ -1453,259 +1706,7 @@ end
 ]]
 
 
-OOP = {}
 
-local tokens = {"instanceof", "super", "class", "classMethods"}
-
---[[function OOP.InstanceOf(obj, class)
-	return OOP.IsObject(obj) and OOP.IsClass(class) and obj.class == class
-		or obj.super and OOP.InstanceOf(obj.super, class)
-end
-
-function OOP.IsClass(class)
-	return type(class) == "userdata" and getmetatable(class) == "oop_class"
-end
-
-function OOP.IsObject(obj)
-	return type(obj) == "userdata" and getmetatable(obj) == "oop_object"
-end]]
-
-function getHighestInheritor(object)
-	if rawequal(object.__data.inheritor, object) then
-		error("Object is equal to inheritor")
-	end
-	return object.__data.inheritor and getHighestInheritor(object.__data.inheritor) or object
-end
-
-function OOP.CreateClass(base, proxy)	
-	local static = {}
-
-	local class = proxy or newproxy(true)
-	local meta = getmetatable(class)
-
-	local classMethods = Class.new(class, base)
-	static.Class = classMethods
-
-	local function newObject(shouldInit: boolean, data: {any}?, ...)
-		local vars = setmetatable({}, {
-			__index = static
-		})
-
-		local object = newproxy(true)
-		local meta = getmetatable(object)		
-
-		local inheritor, mainInheritor = unpack(data or {})
-		mainInheritor = mainInheritor or object
-
-		vars.__data = {
-			initiated = false,
-			inheritor = inheritor,
-			mainInheritor = mainInheritor,
-			vars = vars
-		}
-
-		vars.class = class
-
-		function vars:instanceof(otherClass)
-			return classMethods:IsInstanceOf(otherClass)
-		end
-
-		function vars:equals(obj)
-			if getmetatable(obj) == "oop_object" then
-				return rawequal(mainInheritor, obj.__data.mainInheritor)
-			else
-				return rawequal(object, obj)
-			end
-		end
-
-		function vars:__get(member)
-			local val = vars[member]
-			
-			if val ~= nil then
-				if type(val) == "function" then
-					return function(_, ...)
-						return val(object, ...)
-					end
-				end
-
-				return val
-			elseif vars.__data.super then
-				return vars.__data.super:__get(member)
-			end
-
-			return nil
-		end
-
-		meta.__index = function(self, index)
-			if index == "__data" then
-				return vars.__data
-			elseif index == "super" then
-				return vars.super
-			elseif index == "__get" then
-				return vars.__get
-			end
-
-			return mainInheritor:__get(index)
-		end
-
-		meta.__newindex = function(self, index, value)
-			local super = vars.__data.super
-
-			--[[if table.find(tokens, index) then
-				if index ~= "super" or not base or super then
-					error("Attempted to set a token name: "..index)
-				end
-			end]]
-
-			if index == "super" then
-				vars.super = value
-			elseif inheritor then
-				mainInheritor[index] = value
-			else
-				vars[index] = value
-			end
-		end
-
-		meta.__call = function(self, ...)
-			if vars.__data.initiated then
-				print(vars.__data)
-				error("Instance already initiated", 2)
-			end
-
-			vars.__data.initiated = true
-
-			local super = vars.__data.super
-
-			if static.__init then
-				static.__init(object, ...)
-
-				if super and not super.__data.initiated then
-					error("Must call super constructor in derived class before the end of initialization.", 2)
-				end
-			elseif super then
-				super(...)
-			end
-		end
-
-		meta.__tostring = function(self)
-			return static.__tostring and static.__tostring(self) or tostring(class).." object"
-		end
-		
-		meta.__len = function(self)
-			return assert(static.__len, "__len is unassigned")(self)
-		end
-		
-		meta.__iter = function(self)
-			return assert(static.__iter, "__iter is unassigned")(self)
-		end
-
-		meta.__metatable = "oop_object"
-
-		meta.__eq = function(self, obj)
-			if getmetatable(obj) == "oop_object" then
-				return rawequal(vars.__data.mainInheritor, obj.__data.mainInheritor)
-			else
-				return rawequal(object, obj)
-			end
-		end
-
-		if inheritor then
-			local inherSuper = newproxy(true)
-			local mt = getmetatable(inherSuper)
-
-			for prop, val in meta do
-				mt[prop] = val
-			end
-
-			mt.__index = function(self, index)
-				return vars:__get(index)
-			end
-
-			mt.__tostring = function(self)
-				return tostring(object).." (extra)"
-			end
-
-			inheritor.super = inherSuper
-			inheritor.__data.super = object
-		end
-
-		if base then
-			base.newObject(false, {object, mainInheritor}, ...)
-		end
-
-		static.assign(object)
-
-		if shouldInit then
-			object(...)
-		end
-
-		return object
-	end
-
-	function static.new(...)
-		return newObject(true, nil, ...)
-	end
-
-	function static.AbstractMethod(methodName: string)
-		if type(methodName) ~= "string" then
-			error("The type of method name isn't a string. Got "..typeof(methodName))
-		end
-
-		static[methodName] = function()
-			error("Attempted to call an abstract method. Inheritor must have "..methodName.." included.")
-		end
-	end
-
-	static.assign = function() end
-
-	static.newObject = newObject
-
-	meta.__index = function(self, index)
-		return static[index]
-	end
-
-	meta.__newindex = function(self, index, value)
-		if index == "new" then
-			static.__init = value
-		else
-			static[index] = value
-		end
-	end
-
-	meta.__tostring = function(self)
-		return static.__className or "Class" --or static.env.script.Name
-	end
-
-	meta.__metatable = "oop_class"
-
-	return class
-end
-
-function OOP.CreateSimpleClass()
-	local Class = setmetatable({}, {
-		__newindex = function(self, index, value)
-			if index == "new" then
-				index = "__init__"
-			end
-			
-			rawset(self, index, value)
-		end
-	})
-	
-	Class.__index = Class
-	
-	rawset(Class, "new", function()
-		local self = setmetatable({}, Class)
-
-		if self.__init__ then
-			self.__init__()
-		end
-
-		return self
-	end)
-	
-	return Class
-end
 
 
 Class = {}
