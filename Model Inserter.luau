@@ -5,6 +5,43 @@ js/rbx/FileFormat/BinaryParser.js
 js/rbx/FileFormat/ByteReader.js
 ]]
 
+Class = {}
+Class.__index = Class
+
+local function isClass(class)
+	return type(class) == "userdata" and getmetatable(class) == "oop_class"
+end
+
+local function isObject(obj)
+	return type(obj) == "userdata" and getmetatable(obj) == "oop_object"
+end
+
+function Class.new(class, superClass)
+	local self = setmetatable({}, Class)
+	
+	self.class = class
+	self.superClass = superClass
+	
+	return self	
+end
+
+function Class:GetClass()
+	return self
+end
+
+function Class:IsInstanceOf(otherClass)
+	return isClass(otherClass) and self.class == otherClass
+		or self.superClass and self.superClass.Class:IsInstanceOf(otherClass)
+end
+
+function Class:IsClassOf(instance)
+	return isObject(instance) and instance:instanceof(self.class)
+end
+
+function Class:GetSuperClass()
+	return self.superClass
+end
+
 OOP = {}
 
 local tokens = {"instanceof", "super", "class", "classMethods"}
@@ -1709,42 +1746,7 @@ end
 
 
 
-Class = {}
-Class.__index = Class
 
-local function isClass(class)
-	return type(class) == "userdata" and getmetatable(class) == "oop_class"
-end
-
-local function isObject(obj)
-	return type(obj) == "userdata" and getmetatable(obj) == "oop_object"
-end
-
-function Class.new(class, superClass)
-	local self = setmetatable({}, Class)
-	
-	self.class = class
-	self.superClass = superClass
-	
-	return self	
-end
-
-function Class:GetClass()
-	return self
-end
-
-function Class:IsInstanceOf(otherClass)
-	return isClass(otherClass) and self.class == otherClass
-		or self.superClass and self.superClass.Class:IsInstanceOf(otherClass)
-end
-
-function Class:IsClassOf(instance)
-	return isObject(instance) and instance:instanceof(self.class)
-end
-
-function Class:GetSuperClass()
-	return self.superClass
-end
 
 
 WorkerMonitor = OOP.CreateClass()
