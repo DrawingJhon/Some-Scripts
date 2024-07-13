@@ -296,6 +296,10 @@ function OOP.CreateSimpleClass()
 	return Class
 end
 
+InstanceHandler = OOP.CreateClass()
+ScriptHandler = OOP.CreateClass(InstanceHandler)
+UnionOperationHandler = OOP.CreateClass(InstanceHandler)
+
 local HttpService = game:GetService("HttpService")
 
 local function decodeText(array)
@@ -1251,8 +1255,6 @@ end
 
 local HttpService = game:GetService("HttpService")
 
-InstanceHandler = OOP.CreateClass()
-
 local FirstProperties = {"MaxHealth", "Health", "RunContext", "Source"}
 local LastProperties = {"AssetId", "ChildData", "Parent"}
 
@@ -1337,8 +1339,6 @@ end
 
 
 local ServerStorage = game:GetService("ServerStorage")
-
-UnionOperationHandler = OOP.CreateClass(InstanceHandler)
 
 function UnionOperationHandler.new(self, className, parser)
 	self.super(className, parser)
@@ -1500,10 +1500,6 @@ function UnionOperationHandler:FixChildren()
 		handler:SetProperty("Parent", self.instance)
 	end
 end
-
-
-
-ScriptHandler = OOP.CreateClass(InstanceHandler)
 
 local Players = game:GetService("Players")
 
