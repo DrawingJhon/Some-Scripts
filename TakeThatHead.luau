@@ -117,9 +117,16 @@ local function connect(target)
 	rightArm.C0 *= CFrame.new(0.5, 0, 0) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(20), 0, 0)
 	leftArm.C0 *= CFrame.new(-0.5, 0, 0) * CFrame.Angles(0, 0, math.rad(-90)) * CFrame.Angles(math.rad(20), 0, 0)
 
-	t_head.AncestryChanged:Connect(disconnect)
-	t_head.CanCollide = true
 	t_head:SetAttribute("Tick", tick())
+
+	local tck = t_head:GetAttribute("Tick")
+	t_head.AncestryChanged:Once(function()
+		if tck == t_head:GetAttribute("Tick") then
+			disconnect()
+		end
+	end)
+	t_head.CanCollide = true
+	
 	connectedHead = t_head
 end
 
