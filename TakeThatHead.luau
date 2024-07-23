@@ -58,7 +58,7 @@ local function disconnect()
 	if not connectedHead then return end
 	rightArm:Destroy()
 	leftArm:Destroy()
-	connectedHead:BreakJoints()
+	connectedHead.CoolWeld:Destroy()
 	local tck = connectedHead:GetAttribute("Tick")
 	local p = Players:GetPlayerFromCharacter(connectedHead.Parent)
 	if p then
@@ -109,11 +109,14 @@ local function connect(target)
 	t_humanoid.WalkSpeed = 0
 
 	t_humanoid.RequiresNeck = false
-	t_head:BreakJoints()
+	if t_torso:FindFirstChild("Neck") then
+		t_torso.Neck:Destroy()
+	end
 	t_head.Massless = true
 	t_head:SetNetworkOwner(owner)
 
 	local weld = Instance.new("Weld")
+	weld.Name = "CoolWeld"
 	weld.Part0 = torso
 	weld.Part1 = t_head
 	weld.C0 = CFrame.new(0, 1.2, -2.2) * CFrame.Angles(0, math.rad(180), 0)
