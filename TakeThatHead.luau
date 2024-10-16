@@ -109,9 +109,10 @@ local function connect(target)
 	t_humanoid.WalkSpeed = 0
 
 	t_humanoid.RequiresNeck = false
-	if t_torso:FindFirstChild("Neck") then
-		t_torso.Neck:Destroy()
-	end
+	--if t_torso:FindFirstChild("Neck") then
+	--	t_torso.Neck:Destroy()
+	--end
+	t_head:BreakJoints()
 	t_head.Massless = true
 	t_head:SetNetworkOwner(owner)
 
