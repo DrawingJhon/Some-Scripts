@@ -109,7 +109,7 @@ local function connect(target)
 	t_humanoid.WalkSpeed = 0
 
 	t_humanoid.RequiresNeck = false
-	local headWeld = t_head:FindFirstChildOfClass("Weld") or t_head:FindFirstChildOfClass("Motor6D")
+	local headWeld = t_torso:FindFirstChild("Neck") or t_head:FindFirstChildOfClass("Weld")
 	if headWeld then
 		headWeld:Destroy()
 	end
